@@ -1,47 +1,42 @@
 pipeline {
     agent any
+
     environment {
-        BACKEND_IMAGE = 'simple-notes-app-backend'
-        FRONTEND_IMAGE = 'simple-notes-app-frontend'
-        BACKEND_DIR = 'backend'
-        FRONTEND_DIR = 'frontend/simple-notes-app'
+        IMAGE_NAME = 'my-jenkins-php'
     }
+
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/loremrey/simple-notes-app.git'
+                git 'https://github.com/muhananaufal/simple-notes-app.git'
             }
         }
-        stage('Build Backend Image') {
-            steps {
-                dir(BACKEND_DIR) {
-                    script {
-                        docker.build("${BACKEND_IMAGE}:latest")
-                    }
-                }
-            }
-        }
-        stage('Build Frontend Image') {
-            steps {
-                dir(FRONTEND_DIR) {
-                    script {
-                        docker.build("${FRONTEND_IMAGE}:latest")
-                    }
-                }
-            }
-        }
-        stage('Deploy') {
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    docker.image("${BACKEND_IMAGE}:latest").run('-p 5000:5000')
-                    docker.image("${FRONTEND_IMAGE}:latest").run('-p 3000:3000')
+                    docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}", "./backend")
                 }
             }
         }
-    }
-    post {
-        always {
-            sh 'docker system prune -f'
+
+        stage('Push to Docker Registry') {
+            steps {
+                script {
+                    sh "docker push ${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                    sh "docker push ${IMAGE_NAME}:latest"
+                }
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                script {
+                    sh "docker stop ${IMAGE_NAME} || true"
+                    sh "docker rm ${IMAGE_NAME} || true"
+                    sh "docker run -d --name ${IMAGE_NAME} -p 3000:3000 ${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                }
+            }
         }
     }
 }
